@@ -77,10 +77,14 @@ To release a new version of `hanko`, perform the following steps.
   just bump-version $NEW_VERSION
   ```
 
-- Once the branch is merged, create a draft release and start the release workflow.
+- Once the branch is merged, tag the merged commit, create a draft release and start the release workflow.
 
   ```sh
   just release-latest-version $NEW_VERSION
   ```
 
 - The workflow builds and attests every release asset, publishes the crate, then publishes the draft release as the latest release.
+
+- If the recipe fails after pushing the tag, run its remaining commands by hand.
+
+- If the workflow fails after the crate was published, use "Re-run failed jobs" instead of starting the workflow again, since the same crate version cannot be published twice.

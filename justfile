@@ -73,13 +73,22 @@ bump-version $VERSION: _check_clean_working _check_gh_cli (_validate_semver VERS
     git add Cargo.toml Cargo.lock
     git commit -m "Bump version to v{{ VERSION }}"
 
-# Create a GitHub release containing the latest changes
-release-latest-version version:
+# Tag the latest version on main, create a draft GitHub release and start the release workflow
+release-latest-version version: _check_gh_cli (_validate_semver version)
     #!/usr/bin/env bash
     set -euxo pipefail
-    PREVIOUS_RELEASE=$(gh release list --json name,isLatest --jq '.[] | select(.isLatest)|.name')
     CURRENT_RELEASE="v{{ version }}"
-    CHANGES=$(sed -n "/^## \[{{ version }}]/,/^## \[[0-9].*\]/ {//!p}" {{ CHANGELOG_FILE }})
+    PREVIOUS_RELEASE=$(gh release list --json name,isLatest --jq '.[] | select(.isLatest)|.name')
+
+    git fetch origin main
+    TARGET=$(git rev-parse origin/main)
+    TARGET_VERSION=$(git show "$TARGET:Cargo.toml" | sed -n '/^\[package\]$/,/^\[/ s/^version = "\([^"]*\)"$/\1/p')
+    if [ "$TARGET_VERSION" != "{{ version }}" ]; then
+        echo "Version on main is $TARGET_VERSION, expected {{ version }}"
+        exit 1
+    fi
+
+    CHANGES=$(git show "$TARGET:{{ CHANGELOG_FILE }}" | sed -n "/^## \[{{ version }}]/,/^## \[[0-9].*\]/ {//!p;}")
     RELEASE_NOTES="
     ## What's Changed
 
@@ -88,8 +97,11 @@ release-latest-version version:
     **Full Changelog**: {{ REPO_URL }}/compare/$PREVIOUS_RELEASE...$CURRENT_RELEASE
     "
 
-    gh release create $CURRENT_RELEASE --draft --title $CURRENT_RELEASE --notes-file - <<< "$RELEASE_NOTES"
-    gh workflow run release.yml --ref main -f tag="$CURRENT_RELEASE"
+    # Draft releases do not create their tag, so tag the release commit explicitly.
+    git tag -a "$CURRENT_RELEASE" -m "$CURRENT_RELEASE" "$TARGET"
+    git push origin "refs/tags/$CURRENT_RELEASE"
+    gh release create "$CURRENT_RELEASE" --draft --verify-tag --title "$CURRENT_RELEASE" --notes-file - <<< "$RELEASE_NOTES"
+    gh workflow run release.yml --ref "$CURRENT_RELEASE" -f tag="$CURRENT_RELEASE"
 
 # Publish the crate
 publish: _validate_version_tag
