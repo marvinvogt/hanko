@@ -46,8 +46,10 @@ jobs:
       - name: Verify reproducibility of release artifacts
         run: nix build .#release-artifacts --rebuild --no-update-lock-file
 
+      # Each runner only builds its own platform's archives, so SHA256SUMS is assembled
+      # from all archives in the attest-build-provenance job instead.
       - name: Upload release artifacts
-        run: gh release upload --clobber "${TAG}" release-artifacts/*
+        run: gh release upload --clobber "${TAG}" release-artifacts/hanko-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -130,13 +132,14 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ inputs.tag }}
-      - name: Download release files
-        run: >-
-          gh release download "${TAG}" --dir "${DOWNLOAD_DIR}"
-          --pattern "hanko-*"
-          --pattern "SHA256SUMS"
+      - name: Download release archives
+        run: gh release download "${TAG}" --dir "${DOWNLOAD_DIR}" --pattern "hanko-*.tar.gz"
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Generate checksums
+        working-directory: ${{ env.DOWNLOAD_DIR }}
+        run: LC_ALL=C sha256sum hanko-*.tar.gz > SHA256SUMS
 
       - name: Attest release files
         id: provenance
@@ -149,8 +152,8 @@ jobs:
         env:
           BUNDLE_PATH: ${{ steps.provenance.outputs.bundle-path }}
 
-      - name: Upload provenance
-        run: gh release upload --clobber "${TAG}" "${PROVENANCE_PATH}"
+      - name: Upload checksums and provenance
+        run: gh release upload --clobber "${TAG}" "${DOWNLOAD_DIR}/SHA256SUMS" "${PROVENANCE_PATH}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -182,6 +185,8 @@ jobs:
     needs: cargo-publish
     runs-on: ubuntu-latest
     env:
+      # This job has no checkout, so gh needs the repository explicitly.
+      GH_REPO: ${{ github.repository }}
       TAG: ${{ inputs.tag }}
     steps:
       - name: Publish release
