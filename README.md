@@ -138,7 +138,7 @@ flox install hanko
 
 ## Using Docker
 
-From scratch docker images are [built](https://github.com/marvinvogt/hanko/blob/main/Dockerfile) and attested in CI for every [release] and are available through the GitHub container registry for this repository.
+From scratch docker images are [built](https://github.com/marvinvogt/hanko/blob/main/nix/package.nix) and attested in CI for every [release] and are available through the GitHub container registry for this repository.
 
 ```sh
 docker run -it ghcr.io/marvinvogt/hanko
