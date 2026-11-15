@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-11-15
+
 ### Changed
 
 - The project moved to [marvinvogt/hanko](https://github.com/marvinvogt/hanko), including the homepage and repository URLs in the package metadata.
@@ -200,7 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - aarch64 builds.
 
-[unreleased]: https://github.com/marvinvogt/hanko/compare/v1.1.3...HEAD
+[unreleased]: https://github.com/marvinvogt/hanko/compare/v1.1.4...HEAD
+[1.1.4]: https://github.com/marvinvogt/hanko/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/marvinvogt/hanko/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/marvinvogt/hanko/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/marvinvogt/hanko/compare/v1.1.0...v1.1.1
