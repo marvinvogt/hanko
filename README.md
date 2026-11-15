@@ -166,14 +166,15 @@ REPO         PREDICATE_TYPE                  WORKFLOW
 SRv6d/hanko  https://slsa.dev/provenance/v1  .github/workflows/build.yml@refs/tags/v0.5.1
 ```
 
-Alternatively, using the sigstore [`cosign` CLI](https://github.com/sigstore/cosign), after downloading the appropriate [attestation](https://github.com/marvinvogt/hanko/attestations).
+Alternatively, using the sigstore [`cosign` CLI](https://github.com/sigstore/cosign), with the provenance bundle (`hanko-<tag>.sigstore.json`) attached to the [release].
 
 ```sh
-$ cosign verify-blob-attestation --bundle SRv6d-hanko-attestation-3372432.sigstore.json \
+$ cosign verify-blob-attestation --bundle hanko-v1.1.4.sigstore.json \
       --new-bundle-format \
+      --type slsaprovenance1 \
       --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-      --certificate-identity-regexp="^https://github.com/SRv6d/hanko/.github/workflows/build.yml@refs/tags/v.*$" \
-      hanko-v0.5.1-aarch64-apple-darwin.tar.gz
+      --certificate-identity-regexp="^https://github.com/marvinvogt/hanko/.github/workflows/release.yml@refs/tags/v.*$" \
+      hanko-1.1.4-aarch64-apple-darwin.tar.gz
 Verified OK
 ```
 
