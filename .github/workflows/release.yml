@@ -86,25 +86,29 @@ jobs:
           : "${META_TAGS:?metadata action returned no tags}"
           mapfile -t meta_tags < <(printf '%s\n' "$META_TAGS")
           version_tag="${meta_tags[0]}"
-          arch_tags=()
+          image_name="${version_tag%:*}"
+          arch_refs=()
           for img in release-containers/*.tar.gz; do
-            arch=$(basename "$img" .tar.gz)
             docker load < "$img"
-            tag="${version_tag}-${arch}"
-            docker tag "hanko:${version_tag##*:v}" "$tag"
-            docker push "$tag"
-            arch_tags+=("$tag")
+            # Push each platform image through the version tag, so that it ends up
+            # untagged once the multi-platform index below takes over the tag.
+            docker tag "hanko:${version_tag##*:v}" "$version_tag"
+            docker push "$version_tag"
+            arch_digest=$(docker buildx imagetools inspect \
+              --format '{{json .Manifest}}' \
+              "${version_tag}" | jq -r '.digest')
+            arch_refs+=("${image_name}@${arch_digest}")
           done
           tag_args=()
           for t in "${meta_tags[@]}"; do
             [[ -n "$t" ]] && tag_args+=(--tag "$t")
           done
-          docker buildx imagetools create "${tag_args[@]}" "${arch_tags[@]}"
+          docker buildx imagetools create "${tag_args[@]}" "${arch_refs[@]}"
           digest=$(docker buildx imagetools inspect \
             --format '{{json .Manifest}}' \
             "${version_tag}" | jq -r '.digest')
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-          echo "subject_name=${version_tag%%:*}" >> "$GITHUB_OUTPUT"
+          echo "subject_name=${image_name}" >> "$GITHUB_OUTPUT"
         env:
           META_TAGS: ${{ steps.meta.outputs.tags }}
 
