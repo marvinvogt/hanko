@@ -71,9 +71,9 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # The latest tag is only moved once the release is published, see tag-latest-container.
           tags: |
             type=raw,value=${{ inputs.tag }}
-            type=raw,value=latest
 
       - name: Build container images
         if: runner.os == 'Linux'
@@ -86,25 +86,29 @@ jobs:
           : "${META_TAGS:?metadata action returned no tags}"
           mapfile -t meta_tags < <(printf '%s\n' "$META_TAGS")
           version_tag="${meta_tags[0]}"
-          arch_tags=()
+          image_name="${version_tag%:*}"
+          arch_refs=()
           for img in release-containers/*.tar.gz; do
-            arch=$(basename "$img" .tar.gz)
             docker load < "$img"
-            tag="${version_tag}-${arch}"
-            docker tag "hanko:${version_tag##*:v}" "$tag"
-            docker push "$tag"
-            arch_tags+=("$tag")
+            # Push each platform image through the version tag, so that it ends up
+            # untagged once the multi-platform index below takes over the tag.
+            docker tag "hanko:${version_tag##*:v}" "$version_tag"
+            docker push "$version_tag"
+            arch_digest=$(docker buildx imagetools inspect \
+              --format '{{json .Manifest}}' \
+              "${version_tag}" | jq -r '.digest')
+            arch_refs+=("${image_name}@${arch_digest}")
           done
           tag_args=()
           for t in "${meta_tags[@]}"; do
             [[ -n "$t" ]] && tag_args+=(--tag "$t")
           done
-          docker buildx imagetools create "${tag_args[@]}" "${arch_tags[@]}"
+          docker buildx imagetools create "${tag_args[@]}" "${arch_refs[@]}"
           digest=$(docker buildx imagetools inspect \
             --format '{{json .Manifest}}' \
             "${version_tag}" | jq -r '.digest')
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-          echo "subject_name=${version_tag%%:*}" >> "$GITHUB_OUTPUT"
+          echo "subject_name=${image_name}" >> "$GITHUB_OUTPUT"
         env:
           META_TAGS: ${{ steps.meta.outputs.tags }}
 
@@ -193,3 +197,35 @@ jobs:
         run: gh release edit "${TAG}" --draft=false --latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  tag-latest-container:
+    permissions:
+      # Point the latest container tag at this release's image once the release is published.
+      packages: write
+    needs: publish-release
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Container Registry login
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Re-tagging a single image index keeps its digest, so latest stays covered by the
+      # attestation of the release image.
+      - name: Tag container image as latest
+        run: |
+          digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "${IMAGE}:${TAG}" | jq -r '.digest')
+          docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${digest}"
+          latest_digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "${IMAGE}:latest" | jq -r '.digest')
+          if [ "${latest_digest}" != "${digest}" ]; then
+            echo "latest points to ${latest_digest}, expected ${digest}"
+            exit 1
+          fi
